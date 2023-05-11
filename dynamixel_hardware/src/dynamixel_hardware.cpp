@@ -43,7 +43,7 @@ constexpr const char * const kExtraJointParameters[] = {
   "Profile_Acceleration",
   "Position_P_Gain",
   "Position_I_Gain",
-  "Position_D_Gain"
+  "Position_D_Gain",
   "Velocity_P_Gain",
   "Velocity_I_Gain",
 };
@@ -56,8 +56,14 @@ CallbackReturn DynamixelHardware::on_init(const hardware_interface::HardwareInfo
     return CallbackReturn::ERROR;
   }
 
+  info_.joints.erase(std::remove_if(
+    info_.joints.begin(), info_.joints.end(), 
+    [](auto joint) { return joint.parameters.at("plugin") != "DynamixelHardware"; }), 
+    info_.joints.end());
+
   joints_.resize(info_.joints.size(), Joint());
   joint_ids_.resize(info_.joints.size(), 0);
+  RCLCPP_INFO(rclcpp::get_logger(kDynamixelHardware), "joint_size: %ld", info_.joints.size());
 
   for (uint i = 0; i < info_.joints.size(); i++) {
     joint_ids_[i] = std::stoi(info_.joints[i].parameters.at("id"));
@@ -78,14 +84,14 @@ CallbackReturn DynamixelHardware::on_init(const hardware_interface::HardwareInfo
     return CallbackReturn::SUCCESS;
   }
 
-  auto usb_port = info_.hardware_parameters.at("usb_port");
-  auto baud_rate = std::stoi(info_.hardware_parameters.at("baud_rate"));
+  auto direction_serial = info_.hardware_parameters.at("direction_serial");
+  auto direction_baud = std::stoi(info_.hardware_parameters.at("direction_baud"));
   const char * log = nullptr;
 
-  RCLCPP_INFO(rclcpp::get_logger(kDynamixelHardware), "usb_port: %s", usb_port.c_str());
-  RCLCPP_INFO(rclcpp::get_logger(kDynamixelHardware), "baud_rate: %d", baud_rate);
+  RCLCPP_INFO(rclcpp::get_logger(kDynamixelHardware), "direction_serial: %s", direction_serial.c_str());
+  RCLCPP_INFO(rclcpp::get_logger(kDynamixelHardware), "direction_baud: %d", direction_baud);
 
-  if (!dynamixel_workbench_.init(usb_port.c_str(), baud_rate, &log)) {
+  if (!dynamixel_workbench_.init(direction_serial.c_str(), direction_baud, &log)) {
     RCLCPP_FATAL(rclcpp::get_logger(kDynamixelHardware), "%s", log);
     return CallbackReturn::ERROR;
   }
@@ -99,7 +105,7 @@ CallbackReturn DynamixelHardware::on_init(const hardware_interface::HardwareInfo
   }
 
   enable_torque(false);
-  set_control_mode(ControlMode::Position, true);
+  set_control_mode(ControlMode::ExtendedPosition, true);
   for (uint i = 0; i < info_.joints.size(); ++i) {
     for (auto paramName : kExtraJointParameters) {
       if (info_.joints[i].parameters.find(paramName) != info_.joints[i].parameters.end()) {
